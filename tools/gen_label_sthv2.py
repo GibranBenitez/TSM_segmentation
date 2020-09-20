@@ -43,6 +43,9 @@ if __name__ == '__main__':
             curFolder = folders[i]
             curIDX = idx_categories[i]
             # counting the number of frames in each video folders
+            if not os.path.exists(os.path.join('20bn-something-something-v2-frames', curFolder)):
+                print('{} folder not found'.format(curFolder))
+                continue
             dir_files = os.listdir(os.path.join('20bn-something-something-v2-frames', curFolder))
             output.append('%s %d %d' % (curFolder, len(dir_files), curIDX))
             print('%d/%d' % (i, len(folders)))
