@@ -27,8 +27,9 @@ def extract(video, tmpl='%06d.jpg'):
 
 def target(video_list):
     for video in video_list:
-        os.makedirs(os.path.join(FRAME_ROOT, video[:-5]))
-        extract(video)
+        if not os.path.exists(os.path.join(FRAME_ROOT, video[:-5])):
+            os.makedirs(os.path.join(FRAME_ROOT, video[:-5]))
+            extract(video)
 
 
 if __name__ == '__main__':
