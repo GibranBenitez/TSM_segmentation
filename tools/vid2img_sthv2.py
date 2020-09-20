@@ -30,6 +30,8 @@ def target(video_list):
         if not os.path.exists(os.path.join(FRAME_ROOT, video[:-5])):
             os.makedirs(os.path.join(FRAME_ROOT, video[:-5]))
             extract(video)
+        else:
+            print(video[:-5])
 
 
 if __name__ == '__main__':
