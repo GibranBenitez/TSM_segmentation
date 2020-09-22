@@ -187,7 +187,7 @@ for this_weights, this_test_segments, test_file in zip(weights_list, test_segmen
                            GroupNormalize(net.input_mean, net.input_std),
                        ]), dense_sample=args.dense_sample, twice_sample=args.twice_sample),
             batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, pin_memory=True,
+            # num_workers=args.workers, pin_memory=True,
     )
 
     if args.gpus is not None:
