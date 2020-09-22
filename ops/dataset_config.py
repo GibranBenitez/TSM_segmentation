@@ -79,11 +79,15 @@ def return_somethingv2(modality):
 
 def return_jester(modality):
     filename_categories = 'jester-v1/category.txt'
+    # filename_categories = '20BN-jester/category.txt'
     if modality == 'RGB':
         prefix = '{:05d}.jpg'
-        root_data = ROOT_DATASET + 'jester-20bn-jester-v1'
-        filename_imglist_train = 'jester-train_videofolder.txt'
-        filename_imglist_val = 'jester-val_videofolder.txt'
+        root_data = ROOT_DATASET + 'jester-v1/20bn-jester-v1'
+        filename_imglist_train = 'jester-v1/jester-train_videofolder.txt'
+        filename_imglist_val = '20BN-jester/jester-val_videofolder.txt'
+        # root_data = ROOT_DATASET + '20BN-jester/20bn-jester-v1'
+        # filename_imglist_train = '20BN-jester/jester-train_videofolder.txt'
+        # filename_imglist_val = '20BN-jester/jester-val_videofolder.txt'
     else:
         raise NotImplementedError('no such modality:'+modality)
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
