@@ -245,6 +245,14 @@ We provided several examples to train TSM with this repo:
        --shift --shift_div=8 --shift_place=blockres --npb
   ```
 
+    ```bash
+  python main.py jester RGB \
+       --arch resnet50 --num_segments 8 \
+       --gd 20 --lr 0.01 --lr_steps 20 40 --epochs 50 \
+       --batch-size 8 -j 16 --dropout 0.5 --consensus_type=avg --eval-freq=1 \
+       --shift --shift_div=8 --shift_place=blockres --npb
+  ```
+
 ## Live Demo on NVIDIA Jetson Nano
 
 We have build an online hand gesture recognition demo using our TSM. The model is built with MobileNetV2 backbone and trained on Jester dataset. 
