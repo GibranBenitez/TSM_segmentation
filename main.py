@@ -6,6 +6,7 @@
 import os
 import time
 import shutil
+import sys
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
@@ -275,6 +276,7 @@ def train(train_loader, model, criterion, optimizer, epoch, log, tf_writer):
             print(output)
             log.write(output + '\n')
             log.flush()
+            sys.stdout.flush()
 
     tf_writer.add_scalar('loss/train', losses.avg, epoch)
     tf_writer.add_scalar('acc/train_top1', top1.avg, epoch)
@@ -320,6 +322,7 @@ def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None):
                     i, len(val_loader), batch_time=batch_time, loss=losses,
                     top1=top1, top5=top5))
                 print(output)
+                sys.stdout.flush()
                 if log is not None:
                     log.write(output + '\n')
                     log.flush()
@@ -327,6 +330,7 @@ def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None):
     output = ('Testing Results: Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Loss {loss.avg:.5f}'
               .format(top1=top1, top5=top5, loss=losses))
     print(output)
+    sys.stdout.flush()
     if log is not None:
         log.write(output + '\n')
         log.flush()
