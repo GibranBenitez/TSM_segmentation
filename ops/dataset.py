@@ -27,13 +27,38 @@ class VideoRecord(object):
     def label(self):
         return int(self._data[2])
 
+class VideoRecordIPN(object):
+    def __init__(self, row, idn=1):
+        self._data = row
+        self._idn = idn
+
+    @property
+    def path(self):
+        return self._data[0]
+
+    @property
+    def st_frame(self):
+        return int(self._data[3])
+
+    @property
+    def en_frame(self):
+        return int(self._data[4])
+
+    @property
+    def num_frames(self):
+        return int(self._data[-1])
+
+    @property
+    def label(self):
+        return int(self._data[2])-int(self._idn)       
+
 
 class TSNDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  num_segments=3, new_length=1, modality='RGB',
                  image_tmpl='img_{:05d}.jpg', transform=None,
                  random_shift=True, test_mode=False,
-                 remove_missing=False, dense_sample=False, twice_sample=False):
+                 remove_missing=False, dense_sample=False, twice_sample=False, ipn=False):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -47,6 +72,7 @@ class TSNDataSet(data.Dataset):
         self.remove_missing = remove_missing
         self.dense_sample = dense_sample  # using dense sample as I3D
         self.twice_sample = twice_sample  # twice sample for more validation
+        self.ipn = ipn
         if self.dense_sample:
             print('=> Using dense sample for the dataset...')
         if self.twice_sample:
@@ -59,11 +85,15 @@ class TSNDataSet(data.Dataset):
 
     def _load_image(self, directory, idx):
         if self.modality == 'RGB' or self.modality == 'RGBDiff':
-            try:
-                return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(idx))).convert('RGB')]
-            except Exception:
-                print('error loading image:', os.path.join(self.root_path, directory, self.image_tmpl.format(idx)))
-                return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(1))).convert('RGB')]
+            if self.image_tmpl == '{}_{:06d}.jpg':
+                file_name = self.image_tmpl.format(directory, idx)
+                return [Image.open(os.path.join(self.root_path, directory, file_name)).convert('RGB')]
+            else:
+                try:
+                    return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(idx))).convert('RGB')]
+                except Exception:
+                    print('error loading image:', os.path.join(self.root_path, directory, self.image_tmpl.format(idx)))
+                    return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(1))).convert('RGB')]
         elif self.modality == 'Flow':
             if self.image_tmpl == 'flow_{}_{:05d}.jpg':  # ucf
                 x_img = Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format('x', idx))).convert(
@@ -88,20 +118,31 @@ class TSNDataSet(data.Dataset):
                 flow_x, flow_y, _ = flow.split()
                 x_img = flow_x.convert('L')
                 y_img = flow_y.convert('L')
-
             return [x_img, y_img]
+        elif self.modality == 'Segment':
+            file_name = self.image_tmpl.format(directory, idx)
+            return [Image.open(os.path.join(self.root_path, directory, file_name)).convert('L')]
+
 
     def _parse_list(self):
         # check the frame number is large >3:
-        tmp = [x.strip().split(' ') for x in open(self.list_file)]
-        if not self.test_mode or self.remove_missing:
-            tmp = [item for item in tmp if int(item[1]) >= 3]
-        self.video_list = [VideoRecord(item) for item in tmp]
+        if self.ipn:
+            tmp = [x.strip().split(',') for x in open(self.list_file)]
+            id_label = 1
+            if True:
+                tmp = [item for item in tmp if int(item[2]) > 3]
+                id_label = 4
+            self.video_list = [VideoRecordIPN(item, id_label) for item in tmp]
+        else:
+            tmp = [x.strip().split(' ') for x in open(self.list_file)]
+            if not self.test_mode or self.remove_missing:
+                tmp = [item for item in tmp if int(item[1]) >= 3]
+            self.video_list = [VideoRecord(item) for item in tmp]
 
         if self.image_tmpl == '{:06d}-{}_{:05d}.jpg':
             for v in self.video_list:
                 v._data[1] = int(v._data[1]) / 2
-        print('video number:%d' % (len(self.video_list)))
+        print('video clips:%d' % (len(self.video_list)))
 
     def _sample_indices(self, record):
         """
@@ -172,6 +213,9 @@ class TSNDataSet(data.Dataset):
         elif self.image_tmpl == '{:06d}-{}_{:05d}.jpg':
             file_name = self.image_tmpl.format(int(record.path), 'x', 1)
             full_path = os.path.join(self.root_path, '{:06d}'.format(int(record.path)), file_name)
+        elif self.image_tmpl == '{}_{:06d}.jpg':
+            file_name = self.image_tmpl.format(record.path, record.st_frame)
+            full_path = os.path.join(self.root_path, record.path, file_name)
         else:
             file_name = self.image_tmpl.format(1)
             full_path = os.path.join(self.root_path, record.path, file_name)
@@ -186,6 +230,9 @@ class TSNDataSet(data.Dataset):
             elif self.image_tmpl == '{:06d}-{}_{:05d}.jpg':
                 file_name = self.image_tmpl.format(int(record.path), 'x', 1)
                 full_path = os.path.join(self.root_path, '{:06d}'.format(int(record.path)), file_name)
+            elif self.image_tmpl == '{}_{:06d}.jpg':
+                file_name = self.image_tmpl.format(record.path, record.st_frame)
+                full_path = os.path.join(self.root_path, record.path, file_name)
             else:
                 file_name = self.image_tmpl.format(1)
                 full_path = os.path.join(self.root_path, record.path, file_name)
@@ -198,13 +245,20 @@ class TSNDataSet(data.Dataset):
 
     def get(self, record, indices):
 
+        if self.ipn:
+            stf = max(0, record.st_frame - 1)
+            enf = record.en_frame
+        else:
+            stf = 0
+            enf = record.num_frames
+
         images = list()
         for seg_ind in indices:
-            p = int(seg_ind)
+            p = int(seg_ind) + int(stf)
             for i in range(self.new_length):
                 seg_imgs = self._load_image(record.path, p)
                 images.extend(seg_imgs)
-                if p < record.num_frames:
+                if p < enf:
                     p += 1
 
         process_data = self.transform(images)

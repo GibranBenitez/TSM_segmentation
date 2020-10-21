@@ -24,7 +24,7 @@ from tensorboardX import SummaryWriter
 
 best_prec1 = 0
 
-
+# TSM_jester_RGB_resnet50_shift8_blockres_avg_segment8_e50
 def main():
     global args, best_prec1
     args = parser.parse_args()
@@ -149,7 +149,7 @@ def main():
                        Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
                        ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
                        normalize,
-                   ]), dense_sample=args.dense_sample),
+                   ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn'),
         batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True,
         drop_last=True)  # prevent something not % n_GPU
@@ -166,7 +166,7 @@ def main():
                        Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
                        ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
                        normalize,
-                   ]), dense_sample=args.dense_sample),
+                   ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn'),
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
