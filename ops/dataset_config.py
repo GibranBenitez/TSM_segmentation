@@ -5,7 +5,7 @@
 
 import os
 
-ROOT_DATASET = '/home/space0/datasets/'  # '/data/jilin/'
+ROOT_DATASET = '/export/space0/gibran/dataset/'  # '/data/jilin/'
 
 
 def return_ucf101(modality):
@@ -78,16 +78,33 @@ def return_somethingv2(modality):
 
 
 def return_jester(modality):
-    filename_categories = 'jester-v1/category.txt'
-    # filename_categories = '20BN-jester/category.txt'
+    # filename_categories = 'jester-v1/category.txt'
+    filename_categories = '20BN-jester/category.txt'
     if modality == 'RGB':
         prefix = '{:05d}.jpg'
-        root_data = ROOT_DATASET + 'jester-v1/20bn-jester-v1'
-        filename_imglist_train = 'jester-v1/train_videofolder.txt'
-        filename_imglist_val = 'jester-v1/val_videofolder.txt'
-        # root_data = ROOT_DATASET + '20BN-jester/20bn-jester-v1'
-        # filename_imglist_train = '20BN-jester/train_videofolder.txt'
-        # filename_imglist_val = '20BN-jester/val_videofolder.txt'
+        # root_data = ROOT_DATASET + 'jester-v1/20bn-jester-v1'
+        # filename_imglist_train = 'jester-v1/train_videofolder.txt'
+        # filename_imglist_val = 'jester-v1/val_videofolder.txt'
+        root_data = ROOT_DATASET + '20BN-jester/20bn-jester-v1'
+        filename_imglist_train = '20BN-jester/train_videofolder.txt'
+        filename_imglist_val = '20BN-jester/val_videofolder.txt'
+    else:
+        raise NotImplementedError('no such modality:'+modality)
+    return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
+
+
+def return_ipn(modality):
+    filename_categories = 'HandGestures/IPN_dataset/classIndAll.txt'
+    if modality == 'RGB':
+        prefix = '{}_{:06d}.jpg'
+        root_data = ROOT_DATASET + 'HandGestures/IPN_dataset/frames'
+        filename_imglist_train = 'HandGestures/IPN_dataset/IPNhand_TrainList.txt'
+        filename_imglist_val = 'HandGestures/IPN_dataset/IPNhand_TestList.txt'
+    elif modality == 'Segment':
+        prefix = '{}_{:06d}.jpg'
+        root_data = ROOT_DATASET + 'HandGestures/IPN_dataset/segment'
+        filename_imglist_train = 'HandGestures/IPN_dataset/IPNhand_TrainList.txt'
+        filename_imglist_val = 'HandGestures/IPN_dataset/IPNhand_TestList.txt'
     else:
         raise NotImplementedError('no such modality:'+modality)
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
@@ -107,7 +124,7 @@ def return_kinetics(modality):
 
 def return_dataset(dataset, modality):
     dict_single = {'jester': return_jester, 'something': return_something, 'somethingv2': return_somethingv2,
-                   'ucf101': return_ucf101, 'hmdb51': return_hmdb51,
+                   'ucf101': return_ucf101, 'hmdb51': return_hmdb51, 'ipn': return_ipn,
                    'kinetics': return_kinetics }
     if dataset in dict_single:
         file_categories, file_imglist_train, file_imglist_val, root_data, prefix = dict_single[dataset](modality)
@@ -116,11 +133,19 @@ def return_dataset(dataset, modality):
 
     file_imglist_train = os.path.join(ROOT_DATASET, file_imglist_train)
     file_imglist_val = os.path.join(ROOT_DATASET, file_imglist_val)
-    if isinstance(file_categories, str):
+    if isinstance(file_categories, str):        
         file_categories = os.path.join(ROOT_DATASET, file_categories)
         with open(file_categories) as f:
             lines = f.readlines()
-        categories = [item.rstrip() for item in lines]
+        if dataset == "ipn":
+            categories = [item.rstrip().split(',')[1] for item in lines]
+            categories.remove(categories[0])
+            if True:  # removing classes of pointing only
+                categories.remove(categories[0])
+                categories.remove(categories[0])
+                categories.remove(categories[0])
+        else:
+            categories = [item.rstrip() for item in lines]
     else:  # number of categories
         categories = [None] * file_categories
     n_class = len(categories)
