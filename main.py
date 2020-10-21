@@ -36,9 +36,14 @@ def main():
         full_arch_name += '_shift{}_{}'.format(args.shift_div, args.shift_place)
     if args.temporal_pool:
         full_arch_name += '_tpool'
-    args.store_name = '_'.join(
+    if args.dataset == 'ipn':
+        args.store_name = '_'.join(
+        ['TSM', 'ipn'.format(int(num_class)), args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
+         'e{}'.format(args.epochs), 'lr{:.0e}'.format(args.lr)])
+    else:
+        args.store_name = '_'.join(
         ['TSM', args.dataset, args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
-         'e{}'.format(args.epochs)])
+         'e{}'.format(args.epochs), 'lr{:.0e}'.format(args.lr)])
     if args.pretrain != 'imagenet':
         args.store_name += '_{}'.format(args.pretrain)
     if args.lr_type != 'step':
@@ -47,8 +52,14 @@ def main():
         args.store_name += '_dense'
     if args.non_local > 0:
         args.store_name += '_nl'
+    if args.clip_gradient is not None:
+        args.store_name += '_gd{}'.format(int(args.clip_gradient))
+    if args.no_partialbn:
+        args.store_name += '_npb'
     if args.suffix is not None:
         args.store_name += '_{}'.format(args.suffix)
+    if args.hostname is not None:
+        args.store_name += '_{}'.format(args.hostname)
     print('storing name: ' + args.store_name)
 
     check_rootfolders()

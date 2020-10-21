@@ -266,3 +266,29 @@ class TSNDataSet(data.Dataset):
 
     def __len__(self):
         return len(self.video_list)
+
+if __name__ == '__main__':
+    import torchvision
+    from transforms import *
+    import pdb
+
+    dataset = 'ipn'
+    train_list = '/export/space0/gibran/dataset/HandGestures/IPN_dataset/IPNhand_TrainList.txt'
+    root_path = '/export/space0/gibran/dataset/HandGestures/IPN_dataset/frames'
+    prefix = '{}_{:06d}.jpg'
+    arch = 'resnet'
+    crop_size = 224
+    segments = 8
+
+    datas = TSNDataSet(root_path, train_list, num_segments=segments,
+               new_length=1,
+               modality='RGB',
+               image_tmpl=prefix,
+               transform=torchvision.transforms.Compose([
+                   GroupCenterCrop(crop_size),
+                   Stack(roll=(arch in ['BNInception', 'InceptionV3'])),
+                   ToTorchFormatTensor(div=(arch not in ['BNInception', 'InceptionV3'])),
+                   IdentityTransform(),
+               ]), ipn=dataset=='ipn')
+
+    pdb.set_trace()
