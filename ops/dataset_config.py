@@ -122,7 +122,7 @@ def return_kinetics(modality):
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
 
 
-def return_dataset(dataset, modality):
+def return_dataset(dataset, modality, ipn_no_class=1):
     dict_single = {'jester': return_jester, 'something': return_something, 'somethingv2': return_somethingv2,
                    'ucf101': return_ucf101, 'hmdb51': return_hmdb51, 'ipn': return_ipn,
                    'kinetics': return_kinetics }
@@ -139,10 +139,7 @@ def return_dataset(dataset, modality):
             lines = f.readlines()
         if dataset == "ipn":
             categories = [item.rstrip().split(',')[1] for item in lines]
-            categories.remove(categories[0])
-            if True:  # removing classes of pointing only
-                categories.remove(categories[0])
-                categories.remove(categories[0])
+            for i in range(ipn_no_class): # removing classes of ipn dataset
                 categories.remove(categories[0])
         else:
             categories = [item.rstrip() for item in lines]

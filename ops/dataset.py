@@ -57,8 +57,8 @@ class TSNDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  num_segments=3, new_length=1, modality='RGB',
                  image_tmpl='img_{:05d}.jpg', transform=None,
-                 random_shift=True, test_mode=False,
-                 remove_missing=False, dense_sample=False, twice_sample=False, ipn=False):
+                 random_shift=True, test_mode=False, remove_missing=False,
+                 dense_sample=False, twice_sample=False, ipn=False, ipn_no_class=1):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -73,6 +73,7 @@ class TSNDataSet(data.Dataset):
         self.dense_sample = dense_sample  # using dense sample as I3D
         self.twice_sample = twice_sample  # twice sample for more validation
         self.ipn = ipn
+        self.id_noc = ipn_no_class
         if self.dense_sample:
             print('=> Using dense sample for the dataset...')
         if self.twice_sample:
@@ -128,11 +129,9 @@ class TSNDataSet(data.Dataset):
         # check the frame number is large >3:
         if self.ipn:
             tmp = [x.strip().split(',') for x in open(self.list_file)]
-            id_label = 1
-            if True:
-                tmp = [item for item in tmp if int(item[2]) > 3]
-                id_label = 4
-            self.video_list = [VideoRecordIPN(item, id_label) for item in tmp]
+            if self.id_noc > 1:
+                tmp = [item for item in tmp if int(item[2]) > self.id_noc-1]
+            self.video_list = [VideoRecordIPN(item, self.id_noc) for item in tmp]
         else:
             tmp = [x.strip().split(' ') for x in open(self.list_file)]
             if not self.test_mode or self.remove_missing:

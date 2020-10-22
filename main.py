@@ -30,7 +30,7 @@ def main():
     args = parser.parse_args()
 
     num_class, args.train_list, args.val_list, args.root_path, prefix = dataset_config.return_dataset(args.dataset,
-                                                                                                      args.modality)
+                                                                                args.modality, args.ipn_no_class)
     full_arch_name = args.arch
     if args.shift:
         full_arch_name += '_shift{}_{}'.format(args.shift_div, args.shift_place)
@@ -38,7 +38,7 @@ def main():
         full_arch_name += '_tpool'
     if args.dataset == 'ipn':
         args.store_name = '_'.join(
-        ['TSM', 'ipn'.format(int(num_class)), args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
+        ['TSM', 'ipn{}'.format(int(num_class)), args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
          'e{}'.format(args.epochs), 'lr{:.0e}'.format(args.lr)])
     else:
         args.store_name = '_'.join(
@@ -160,7 +160,7 @@ def main():
                        Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
                        ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
                        normalize,
-                   ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn'),
+                   ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn', ipn_no_class=args.ipn_no_class),
         batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True,
         drop_last=True)  # prevent something not % n_GPU
@@ -177,7 +177,7 @@ def main():
                        Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
                        ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
                        normalize,
-                   ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn'),
+                   ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn', ipn_no_class=args.ipn_no_class),
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
