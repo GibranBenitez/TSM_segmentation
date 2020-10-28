@@ -378,14 +378,16 @@ class TSN(nn.Module):
     def scale_size(self):
         return self.input_size * 256 // 224
 
-    def get_augmentation(self, flip=True):
+    def get_augmentation(self, flip=True, biovid=False):
+        # meter rotacion o alguna otra data augmentation en biovid checar results
         if self.modality == 'RGB':
-            if flip:
-                return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
+            scales = [1, .875, .75] if biovid else [1, .875, .75, .66]
+            if flip: 
+                return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, scales),
                                                        GroupRandomHorizontalFlip(is_flow=False)])
             else:
                 print('#' * 20, 'NO FLIP!!!')
-                return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66])])
+                return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, scales)])
         elif self.modality == 'Flow':
             return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75]),
                                                    GroupRandomHorizontalFlip(is_flow=True)])

@@ -9,7 +9,11 @@ from PIL import Image
 import os
 import numpy as np
 from numpy.random import randint
-
+# intesities = ['BL1', 'PA1', 'PA2', 'PA3', 'PA4']
+dict_biovid = [None, None, 
+        {'BL1': 0, 'PA4': 1}, {'BL1': 0, 'PA3': 1, 'PA4': 2},
+        {'BL1': 0, 'PA2': 1, 'PA3': 2, 'PA4': 3},
+        {'BL1': 0, 'PA1': 1, 'PA2': 2, 'PA3': 3, 'PA4': 4}]
 
 class VideoRecord(object):
     def __init__(self, row):
@@ -89,6 +93,9 @@ class TSNDataSet(data.Dataset):
             if self.image_tmpl == '{}_{:06d}.jpg':
                 file_name = self.image_tmpl.format(directory, idx)
                 return [Image.open(os.path.join(self.root_path, directory, file_name)).convert('RGB')]
+            elif self.image_tmpl == '{}/{}_{:04d}.jpg':
+                file_name = self.image_tmpl.format(directory, directory, idx)
+                return [Image.open(os.path.join(self.root_path, directory.split('-')[0], file_name)).convert('RGB')]
             else:
                 try:
                     return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(idx))).convert('RGB')]
@@ -124,14 +131,42 @@ class TSNDataSet(data.Dataset):
             file_name = self.image_tmpl.format(directory, idx)
             return [Image.open(os.path.join(self.root_path, directory, file_name)).convert('L')]
 
+    def _parse_biovid(self, directory, frames=138):
+        folder_list = os.listdir(os.path.join(self.root_path, directory))
+        folder_list.sort()
+        bio_labels = dict_biovid[self.id_noc]
+        # print(list(bio_labels.keys()))
+        out_list = []
+        for i, path in enumerate(folder_list):
+            if path.split('-')[1] not in list(bio_labels.keys()):
+                continue
+            out_list.append([path, frames, bio_labels[path.split('-')[1]]])
+
+        return out_list
 
     def _parse_list(self):
+        # hacer una funcion que genere todos los items de un folder de persona
+        #   lo que generaria listas de forma que VideoRecord class se pueda usar
         # check the frame number is large >3:
         if self.ipn:
             tmp = [x.strip().split(',') for x in open(self.list_file)]
             if self.id_noc > 1:
                 tmp = [item for item in tmp if int(item[2]) > self.id_noc-1]
             self.video_list = [VideoRecordIPN(item, self.id_noc) for item in tmp]
+        if self.image_tmpl == '{}/{}_{:04d}.jpg':
+            val_id = int(self.list_file.split(',')[1])
+            main_folder_list = os.listdir(self.root_path)
+            main_folder_list.sort()
+            if self.list_file.split(',')[0] == 'train':
+                print('generating training list of {} subjects...'.format(len(main_folder_list)-1))
+                tmp = []
+                for item in main_folder_list:
+                    if item != main_folder_list[val_id]:
+                        tmp += self._parse_biovid(item)
+            else:
+                print('validating BioVid with subject: {}'.format(main_folder_list[val_id]))
+                tmp = self._parse_biovid(main_folder_list[val_id])
+            self.video_list = [VideoRecord(item) for item in tmp]
         else:
             tmp = [x.strip().split(' ') for x in open(self.list_file)]
             if not self.test_mode or self.remove_missing:
@@ -215,6 +250,9 @@ class TSNDataSet(data.Dataset):
         elif self.image_tmpl == '{}_{:06d}.jpg':
             file_name = self.image_tmpl.format(record.path, record.st_frame)
             full_path = os.path.join(self.root_path, record.path, file_name)
+        elif self.image_tmpl == '{}/{}_{:04d}.jpg':
+            file_name = self.image_tmpl.format(record.path, record.path, 1)
+            full_path = os.path.join(self.root_path, record.path.split('-')[0], file_name)
         else:
             file_name = self.image_tmpl.format(1)
             full_path = os.path.join(self.root_path, record.path, file_name)

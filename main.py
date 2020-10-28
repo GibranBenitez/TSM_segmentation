@@ -30,20 +30,22 @@ def main():
     args = parser.parse_args()
 
     num_class, args.train_list, args.val_list, args.root_path, prefix = dataset_config.return_dataset(args.dataset,
-                                                                                args.modality, args.ipn_no_class)
+                                                            args.modality, args.ipn_no_class, args.bio_validation)
     full_arch_name = args.arch
     if args.shift:
         full_arch_name += '_shift{}_{}'.format(args.shift_div, args.shift_place)
     if args.temporal_pool:
         full_arch_name += '_tpool'
-    if args.dataset == 'ipn':
+    if args.dataset in ['ipn', 'biovid']:
         args.store_name = '_'.join(
-        ['TSM', 'ipn{}'.format(int(num_class)), args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
+        ['TSM', '{}{}'.format(args.dataset,int(num_class)), args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
          'e{}'.format(args.epochs), 'lr{:.0e}'.format(args.lr)])
     else:
         args.store_name = '_'.join(
         ['TSM', args.dataset, args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
          'e{}'.format(args.epochs), 'lr{:.0e}'.format(args.lr)])
+    if args.dataset == 'biovid':
+        args.store_name += '_val{}'.format(args.bio_validation)
     if args.pretrain != 'imagenet':
         args.store_name += '_{}'.format(args.pretrain)
     if args.lr_type != 'step':
@@ -81,7 +83,7 @@ def main():
     input_mean = model.input_mean
     input_std = model.input_std
     policies = model.get_optim_policies()
-    train_augmentation = model.get_augmentation(flip=False if 'something' in args.dataset or 'jester' in args.dataset or 'ipn' in args.dataset else True)
+    train_augmentation = model.get_augmentation(flip=False if args.dataset in ['something', 'jester', 'ipn'] else True, biovid=args.dataset=='biovid')
 
     model = torch.nn.DataParallel(model, device_ids=args.gpus).cuda()
 
@@ -203,18 +205,18 @@ def main():
         adjust_learning_rate(optimizer, epoch, args.lr_type, args.lr_steps)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, log_training, tf_writer)
+        train(train_loader, model, criterion, optimizer, epoch, log_training, tf_writer, less_cls=num_class < 5)
 
         # evaluate on validation set
         if (epoch + 1) % args.eval_freq == 0 or epoch == args.epochs - 1:
-            prec1 = validate(val_loader, model, criterion, epoch, log_training, tf_writer)
+            prec1 = validate(val_loader, model, criterion, epoch, log_training, tf_writer, less_cls=num_class < 5)
 
             # remember best prec@1 and save checkpoint
             is_best = prec1 > best_prec1
             best_prec1 = max(prec1, best_prec1)
             tf_writer.add_scalar('acc/test_top1_best', best_prec1, epoch)
 
-            output_best = 'Best Prec@1: %.3f\n' % (best_prec1)
+            output_best = 'Best Prec@1: %.3f' % (best_prec1)
             print(output_best)
             log_training.write(output_best + '\n')
             log_training.flush()
@@ -228,7 +230,8 @@ def main():
             }, is_best)
 
 
-def train(train_loader, model, criterion, optimizer, epoch, log, tf_writer):
+def train(train_loader, model, criterion, optimizer, epoch, log, tf_writer, less_cls=False):
+
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -257,7 +260,12 @@ def train(train_loader, model, criterion, optimizer, epoch, log, tf_writer):
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+        if less_cls:
+            prec = accuracy(output.data, target, topk=(1,))
+            prec1 = prec[0]
+            prec5 = prec[0]
+        else:
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         losses.update(loss.item(), input.size(0))
         top1.update(prec1.item(), input.size(0))
         top5.update(prec5.item(), input.size(0))
@@ -295,7 +303,7 @@ def train(train_loader, model, criterion, optimizer, epoch, log, tf_writer):
     tf_writer.add_scalar('lr', optimizer.param_groups[-1]['lr'], epoch)
 
 
-def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None):
+def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None, less_cls=False):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -314,7 +322,12 @@ def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None):
             loss = criterion(output, target)
 
             # measure accuracy and record loss
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+            if less_cls:
+                prec = accuracy(output.data, target, topk=(1,))
+                prec1 = prec[0]
+                prec5 = prec[0]
+            else:
+                prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
 
             losses.update(loss.item(), input.size(0))
             top1.update(prec1.item(), input.size(0))

@@ -121,11 +121,21 @@ def return_kinetics(modality):
         raise NotImplementedError('no such modality:' + modality)
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
 
+def return_biovid(modality):
+    filename_categories = 5
+    if modality == 'RGB':
+        root_data = ROOT_DATASET + 'BioVid/PartA/crops'
+        filename_imglist_train = 'train'
+        filename_imglist_val = 'val'
+        prefix = '{}/{}_{:04d}.jpg'  #071309_w_21-PA3-055_0069.jpg  071309_w_21/071309_w_21-PA3-055/
+    else:
+        raise NotImplementedError('no such modality:' + modality)
+    return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
 
-def return_dataset(dataset, modality, ipn_no_class=1):
+def return_dataset(dataset, modality, ipn_no_class=1, bio_val=0):
     dict_single = {'jester': return_jester, 'something': return_something, 'somethingv2': return_somethingv2,
                    'ucf101': return_ucf101, 'hmdb51': return_hmdb51, 'ipn': return_ipn,
-                   'kinetics': return_kinetics }
+                   'kinetics': return_kinetics, 'biovid': return_biovid}
     if dataset in dict_single:
         file_categories, file_imglist_train, file_imglist_val, root_data, prefix = dict_single[dataset](modality)
     else:
@@ -143,6 +153,10 @@ def return_dataset(dataset, modality, ipn_no_class=1):
                 categories.remove(categories[0])
         else:
             categories = [item.rstrip() for item in lines]
+    elif dataset == "biovid":
+        categories = [None] * ipn_no_class
+        file_imglist_train = 'train,{}'.format(str(bio_val))
+        file_imglist_val = 'val,{}'.format(str(bio_val))
     else:  # number of categories
         categories = [None] * file_categories
     n_class = len(categories)
