@@ -127,9 +127,30 @@ class TSNDataSet(data.Dataset):
                 x_img = flow_x.convert('L')
                 y_img = flow_y.convert('L')
             return [x_img, y_img]
-        elif self.modality == 'Segment':
+        elif self.modality in ['RGB-flo', 'RGB-seg']:
+            if self.modality.split('-')[1] == 'flo':
+                sensor = 'flow'
+                ext = 'jpg'
+            elif self.modality.split('-')[1] == 'seg':
+                sensor = 'segment_five'
+                ext = 'png'
+
             file_name = self.image_tmpl.format(directory, idx)
-            return [Image.open(os.path.join(self.root_path, directory, file_name)).convert('L')]
+            imgC = Image.open(os.path.join(self.root_path, directory, file_name)).convert('RGB')
+            imgD = Image.open(os.path.join(self.root_path.replace('frames',sensor), directory, file_name.replace('jpg',ext))).convert('RGB')
+            elif self.modality.split('-')[1] == 'seg':
+                return [imgC, self._ipn_fassd(imgD.convert('L'))]
+            else:
+                return [imgC, imgD]
+
+    def _ipn_fassd(self, img, pix_val=190):
+        imgS = np.asarray(img)
+        imgT = imgS.copy()
+        imgT[imgS==pix_val] = 0
+        imgT[imgT>0] = 255
+        imgT = np.uint8(imgT)
+
+        return Image.fromarray(np.concatenate([np.expand_dims(imgT, 2),np.expand_dims(imgT, 2),np.expand_dims(imgT, 2)], axis=2))
 
     def _parse_biovid(self, directory, frames=138):
         folder_list = os.listdir(os.path.join(self.root_path, directory))
@@ -153,7 +174,7 @@ class TSNDataSet(data.Dataset):
             if self.id_noc > 1:
                 tmp = [item for item in tmp if int(item[2]) > self.id_noc-1]
             self.video_list = [VideoRecordIPN(item, self.id_noc) for item in tmp]
-        if self.image_tmpl == '{}/{}_{:04d}.jpg':
+        elif self.image_tmpl == '{}/{}_{:04d}.jpg':
             val_id = int(self.list_file.split(',')[1])
             main_folder_list = os.listdir(self.root_path)
             main_folder_list.sort()
@@ -306,11 +327,12 @@ class TSNDataSet(data.Dataset):
 
 if __name__ == '__main__':
     import torchvision
-    from transforms import *
+    from ops.transforms import *
     import pdb
 
     dataset = 'ipn'
-    train_list = '/export/space0/gibran/dataset/HandGestures/IPN_dataset/IPNhand_TrainList.txt'
+    modality = 'RGB-seg'
+    train_list = '/export/space0/gibran/dataset/HandGestures/IPN_dataset/IPNhand_TestList.txt'
     root_path = '/export/space0/gibran/dataset/HandGestures/IPN_dataset/frames'
     prefix = '{}_{:06d}.jpg'
     arch = 'resnet'
@@ -319,13 +341,27 @@ if __name__ == '__main__':
 
     datas = TSNDataSet(root_path, train_list, num_segments=segments,
                new_length=1,
-               modality='RGB',
+               modality=modality,
                image_tmpl=prefix,
                transform=torchvision.transforms.Compose([
                    GroupCenterCrop(crop_size),
-                   Stack(roll=(arch in ['BNInception', 'InceptionV3'])),
+                   Stack(roll=(arch in ['BNInception', 'InceptionV3']),mask=(modality in ['RGB-flo', 'RGB-seg'])),
                    ToTorchFormatTensor(div=(arch not in ['BNInception', 'InceptionV3'])),
                    IdentityTransform(),
-               ]), ipn=dataset=='ipn')
+               ]), ipn=dataset=='ipn', ipn_no_class=1)
+
+    vloader = torch.utils.data.DataLoader(
+        TSNDataSet(root_path, train_list, num_segments=segments,
+               new_length=1,
+               modality=modality,
+               image_tmpl=prefix,
+               random_shift=False,
+               transform=torchvision.transforms.Compose([
+                   GroupCenterCrop(crop_size),
+                   Stack(roll=(arch in ['BNInception', 'InceptionV3']),mask=(modality in ['RGB-flo', 'RGB-seg'])),
+                   ToTorchFormatTensor(div=(arch not in ['BNInception', 'InceptionV3'])),
+                   IdentityTransform(),
+               ]), ipn=dataset=='ipn', ipn_no_class=1),
+        batch_size=2, shuffle=False, pin_memory=True)
 
     pdb.set_trace()

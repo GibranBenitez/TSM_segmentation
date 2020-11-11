@@ -136,6 +136,8 @@ def main():
         model_dict.update(sd)
         model.load_state_dict(model_dict)
 
+    model.module.RGBD_mod()
+
     if args.temporal_pool and not args.resume:
         make_temporal_pool(model.module.base_model, args.num_segments)
 
@@ -147,7 +149,7 @@ def main():
     else:
         normalize = IdentityTransform()
 
-    if args.modality == 'RGB':
+    if args.modality in ['RGB', 'RGB-flo', 'RGB-seg']:
         data_length = 1
     elif args.modality in ['Flow', 'RGBDiff']:
         data_length = 5
@@ -159,7 +161,7 @@ def main():
                    image_tmpl=prefix,
                    transform=torchvision.transforms.Compose([
                        train_augmentation,
-                       Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
+                       Stack(roll=(args.arch in ['BNInception', 'InceptionV3']),mask=(args.modality in ['RGB-flo', 'RGB-seg'])),
                        ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
                        normalize,
                    ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn', ipn_no_class=args.ipn_no_class),
@@ -176,7 +178,7 @@ def main():
                    transform=torchvision.transforms.Compose([
                        GroupScale(int(scale_size)),
                        GroupCenterCrop(crop_size),
-                       Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
+                       Stack(roll=(args.arch in ['BNInception', 'InceptionV3']),mask=(args.modality in ['RGB-flo', 'RGB-seg'])),
                        ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
                        normalize,
                    ]), dense_sample=args.dense_sample, ipn=args.dataset=='ipn', ipn_no_class=args.ipn_no_class),

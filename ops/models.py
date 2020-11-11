@@ -60,14 +60,18 @@ class TSN(nn.Module):
 
         feature_dim = self._prepare_tsn(num_class)
 
-        if self.modality == 'Flow':
-            print("Converting the ImageNet model to a flow init model")
-            self.base_model = self._construct_flow_model(self.base_model)
-            print("Done. Flow model ready...")
-        elif self.modality == 'RGBDiff':
-            print("Converting the ImageNet model to RGB+Diff init model")
-            self.base_model = self._construct_diff_model(self.base_model)
-            print("Done. RGBDiff model ready.")
+        # if self.modality == 'Flow':
+        #     print("Converting the ImageNet model to a flow init model")
+        #     self.base_model = self._construct_flow_model(self.base_model)
+        #     print("Done. Flow model ready...")
+        # elif self.modality == 'RGBDiff':
+        #     print("Converting the ImageNet model to RGB+Diff init model")
+        #     self.base_model = self._construct_diff_model(self.base_model)
+        #     print("Done. RGBDiff model ready.")
+        # elif self.modality in ['RGB-flo', 'RGB-seg']:
+        #     print("Converting the ImageNet model to a flow init model")
+        #     self.base_model = self._construct_RGBD_model(self.base_model)
+        #     print("Done. Flow model ready...")
 
         self.consensus = ConsensusModule(consensus_type)
 
@@ -77,6 +81,21 @@ class TSN(nn.Module):
         self._enable_pbn = partial_bn
         if partial_bn:
             self.partialBN(True)
+
+
+    def RGBD_mod(self):
+        if self.modality == 'Flow':
+            print("Converting the ImageNet model to a flow init model")
+            self.base_model = self._construct_flow_model(self.base_model)
+            print("Done. Flow model ready...")
+        elif self.modality == 'RGBDiff':
+            print("Converting the ImageNet model to RGB+Diff init model")
+            self.base_model = self._construct_diff_model(self.base_model)
+            print("Done. RGBDiff model ready.")
+        elif self.modality in ['RGB-flo', 'RGB-seg']:
+            print("Converting the ImageNet model to a {} init model".format(self.modality))
+            self.base_model = self._construct_RGBD_model(self.base_model)
+            print("Done. New model ready...")
 
     def _prepare_tsn(self, num_class):
         feature_dim = getattr(self.base_model, self.base_model.last_layer_name).in_features
@@ -126,6 +145,9 @@ class TSN(nn.Module):
             elif self.modality == 'RGBDiff':
                 self.input_mean = [0.485, 0.456, 0.406] + [0] * 3 * self.new_length
                 self.input_std = self.input_std + [np.mean(self.input_std) * 2] * 3 * self.new_length
+            elif self.modality in ['RGB-flo', 'RGB-seg']:
+                self.input_mean = self.input_mean + [0.5]
+                self.input_std = self.input_std + [np.mean(self.input_std)]
 
         elif base_model == 'mobilenetv2':
             from archs.mobilenet_v2 import mobilenet_v2, InvertedResidual
@@ -150,6 +172,9 @@ class TSN(nn.Module):
             elif self.modality == 'RGBDiff':
                 self.input_mean = [0.485, 0.456, 0.406] + [0] * 3 * self.new_length
                 self.input_std = self.input_std + [np.mean(self.input_std) * 2] * 3 * self.new_length
+            elif self.modality in ['RGB-flo', 'RGB-seg']:
+                self.input_mean = self.input_mean + [0.5]
+                self.input_std = self.input_std + [np.mean(self.input_std)]
 
         elif base_model == 'BNInception':
             from archs.bn_inception import bninception
@@ -162,6 +187,9 @@ class TSN(nn.Module):
                 self.input_mean = [128]
             elif self.modality == 'RGBDiff':
                 self.input_mean = self.input_mean * (1 + self.new_length)
+            elif self.modality in ['RGB-flo', 'RGB-seg']:
+                self.input_mean = self.input_mean + [128]
+                self.input_std = self.input_std + [np.mean(self.input_std)]
             if self.is_shift:
                 print('Adding temporal shift...')
                 self.base_model.build_temporal_ops(
@@ -267,6 +295,8 @@ class TSN(nn.Module):
             if self.modality == 'RGBDiff':
                 sample_len = 3 * self.new_length
                 input = self._get_diff(input)
+            elif self.modality in ['RGB-flo', 'RGB-seg']:
+                sample_len = 4
 
             base_out = self.base_model(input.view((-1, sample_len) + input.size()[-2:]))
         else:
@@ -370,6 +400,35 @@ class TSN(nn.Module):
         setattr(container, layer_name, new_conv)
         return base_model
 
+    def _construct_RGBD_model(self, base_model):
+        # modify the convolution layers
+        # Torch models are usually defined in a hierarchical way.
+        # nn.modules.children() return all sub modules in a DFS manner
+        modules = list(self.base_model.modules())
+        first_conv_idx = list(filter(lambda x: isinstance(modules[x], nn.Conv2d), list(range(len(modules)))))[0]
+        conv_layer = modules[first_conv_idx]
+        container = modules[first_conv_idx - 1]
+
+        # modify parameters, assume the first blob contains the convolution kernels
+        params = [x.clone() for x in conv_layer.parameters()]
+        kernel_size = params[0].size()
+        new_kernel_size = kernel_size[:1] + (1,) + kernel_size[2:]
+        new_kernels = torch.mul(torch.cat((params[0].data, params[0].data.mean(dim=1, keepdim=True).expand(new_kernel_size).contiguous()), 1), 0.6)
+        # new_kernels = torch.cat((params[0].data, params[0].data.mean(dim=1, keepdim=True).expand(new_kernel_size).contiguous()), 1)
+        new_kernel_size = kernel_size[:1] + (4,) + kernel_size[2:]
+
+        new_conv = nn.Conv2d(new_kernel_size[1], conv_layer.out_channels,
+                             conv_layer.kernel_size, conv_layer.stride, conv_layer.padding,
+                             bias=True if len(params) == 2 else False)
+        new_conv.weight.data = new_kernels
+        if len(params) == 2:
+            new_conv.bias.data = params[1].data  # add bias if neccessary
+        layer_name = list(container.state_dict().keys())[0][:-7]  # remove .weight suffix to get the layer name
+
+        # replace the first convolution layer
+        setattr(container, layer_name, new_conv)
+        return base_model
+
     @property
     def crop_size(self):
         return self.input_size
@@ -380,7 +439,7 @@ class TSN(nn.Module):
 
     def get_augmentation(self, flip=True, biovid=False):
         # meter rotacion o alguna otra data augmentation en biovid checar results
-        if self.modality == 'RGB':
+        if self.modality in ['RGB', 'RGB-flo', 'RGB-seg']:
             scales = [1, .875, .75] if biovid else [1, .875, .75, .66]
             if flip: 
                 return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, scales),
