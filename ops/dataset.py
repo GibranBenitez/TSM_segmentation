@@ -138,7 +138,7 @@ class TSNDataSet(data.Dataset):
             file_name = self.image_tmpl.format(directory, idx)
             imgC = Image.open(os.path.join(self.root_path, directory, file_name)).convert('RGB')
             imgD = Image.open(os.path.join(self.root_path.replace('frames',sensor), directory, file_name.replace('jpg',ext))).convert('RGB')
-            elif self.modality.split('-')[1] == 'seg':
+            if self.modality.split('-')[1] == 'seg':
                 return [imgC, self._ipn_fassd(imgD.convert('L'))]
             else:
                 return [imgC, imgD]
@@ -239,8 +239,14 @@ class TSNDataSet(data.Dataset):
 
     def _get_test_indices(self, record):
         if self.dense_sample:
-            sample_pos = max(1, 1 + record.num_frames - 64)
-            t_stride = 64 // self.num_segments
+            # # Orginal:
+            # sample_pos = max(1, 1 + record.num_frames - 64)
+            # t_stride = 64 // self.num_segments
+            # start_list = np.linspace(0, sample_pos - 1, num=10, dtype=int)
+            # Proposed:
+            chunks = record.num_frames//self.num_segments
+            t_stride = max(1, chunks // self.num_segments)
+            sample_pos = max(1, 1 + record.num_frames - t_stride*self.num_segments)
             start_list = np.linspace(0, sample_pos - 1, num=10, dtype=int)
             offsets = []
             for start_idx in start_list.tolist():

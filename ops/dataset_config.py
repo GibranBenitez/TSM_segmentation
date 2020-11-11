@@ -154,11 +154,11 @@ def return_dataset(dataset, modality, ipn_no_class=1, bio_val=0):
         else:
             categories = [item.rstrip() for item in lines]
     elif dataset == "biovid":
-        categories = [None] * ipn_no_class
+        categories = ["None"] * ipn_no_class
         file_imglist_train = 'train,{}'.format(str(bio_val))
         file_imglist_val = 'val,{}'.format(str(bio_val))
     else:  # number of categories
         categories = [None] * file_categories
     n_class = len(categories)
     print('{}: {} classes'.format(dataset, n_class))
-    return n_class, file_imglist_train, file_imglist_val, root_data, prefix
+    return n_class, categories, file_imglist_train, file_imglist_val, root_data, prefix

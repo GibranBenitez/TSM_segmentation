@@ -19,17 +19,17 @@ from ops.transforms import *
 from ops import dataset_config
 from torch.nn import functional as F
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # options
 parser = argparse.ArgumentParser(description="TSM testing on the full validation set")
-parser.add_argument('--dataset', type=str, default="biovid")
+parser.add_argument('--dataset', type=str, default="ipn")
 
 # may contain splits
-parser.add_argument('--weights', type=str, default="./checkpoint/TSM_biovid2_RGB_resnet50_shift8_blockres_avg_segment16_e50_lr1e-04_val")
-parser.add_argument('--val_ids', type=str, default="0,86")
-parser.add_argument('--test_segments', type=str, default="16")
+parser.add_argument('--weights', type=str, default="./checkpoint/TSM_ipn14_RGB-seg_resnet50_shift8_blockres_avg_segment8_e50_lr1e-03_gp30/")
+parser.add_argument('--val_ids', type=str, default="0,0")
+parser.add_argument('--test_segments', type=str, default="8")
 parser.add_argument('--dense_sample', default=False, action="store_true", help='use dense sample as I3D')
-parser.add_argument('--twice_sample', default=True, action="store_true", help='use twice sample for ensemble')
+parser.add_argument('--twice_sample', default=False, action="store_true", help='use twice sample for ensemble')
 parser.add_argument('--full_res', default=False, action="store_true",
                     help='use full resolution 256x256 for test as in Non-local I3D')
 
@@ -41,7 +41,7 @@ parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
 
 # for true test
 parser.add_argument('--test_list', type=str, default=None)
-parser.add_argument('--csv_file', type=str, default=None)
+parser.add_argument('--csv_file', type=str, default="test_results")
 
 parser.add_argument('--softmax', default=False, action="store_true", help='use softmax')
 
@@ -100,8 +100,8 @@ def parse_shift_option_from_log_name(log_name):
 
 def parse_biovid_from_log_name(log_name):
     # TSM_biovid2_RGB_resnet50_shift8_blockres_avg_segment16_e50_lr1e-04_val0_gp22
+    strings = log_name.split('_')
     if 'biovid' in log_name: 
-        strings = log_name.split('_')
         for i, s in enumerate(strings):
             if 'biovid' in s:
                 break
@@ -114,9 +114,9 @@ def parse_biovid_from_log_name(log_name):
         for i, s in enumerate(strings):
             if 'ipn' in s:
                 break
-        return int(strings[i].replace('ipn', '')), 0
+        return 15-int(strings[i].replace('ipn', '')), 0
     else:
-        return 2, 0
+        return 1, 0
 
 
 def eval_video(video_data, net, this_test_segments, modality):
@@ -131,12 +131,14 @@ def eval_video(video_data, net, this_test_segments, modality):
         if args.twice_sample:
             num_crop *= 2
 
-        if modality == 'RGB':
-            length = 3
+        if modality in ['RGB-flo', 'RGB-seg']:
+            length = 4
         elif modality == 'Flow':
             length = 10
         elif modality == 'RGBDiff':
             length = 18
+        elif modality == 'RGB':
+            length = 3
         else:
             raise ValueError("Unknown modality "+ modality)
 
@@ -164,10 +166,13 @@ val_ids = args.val_ids.split(',')
 output = []
 top1_ = AverageMeter()
 top5_ = AverageMeter()
+weights_name = args.weights
 print(val_ids)
 for val_id in range(int(val_ids[0]),int(val_ids[1])+1):
-    weights_name = list(glob.iglob(args.weights+str(val_id)+"*"))[0]
+    if args.dataset == "biovid":
+        weights_name = list(glob.iglob(args.weights+str(val_id)+"*"))[0] 
     weights_name = os.path.join(weights_name,"ckpt.best.pth.tar")
+    print(weights_name)
     weights_list = [weights_name]
     test_segments_list = [int(s) for s in args.test_segments.split(',')]
     assert len(weights_list) == len(test_segments_list)
@@ -189,14 +194,18 @@ for val_id in range(int(val_ids[0]),int(val_ids[1])+1):
     total_num = None
     for this_weights, this_test_segments, test_file in zip(weights_list, test_segments_list, test_file_list):
         is_shift, shift_div, shift_place = parse_shift_option_from_log_name(this_weights)
-        if 'RGB' in this_weights:
-            modality = 'RGB'
-        else:
+        if 'Flow' in this_weights:
             modality = 'Flow'
+        elif 'RGB-seg' in this_weights:
+            modality = 'RGB-seg'
+        elif 'RGB-flo' in this_weights:
+            modality = 'RGB-flo'
+        elif 'RGB' in this_weights:
+            modality = 'RGB'
         this_arch = this_weights.split('TSM_')[1].split('_')[2]
         ipn_no_class, bio_validation = parse_biovid_from_log_name(this_weights)
         modality_list.append(modality)
-        num_class, args.train_list, val_list, root_path, prefix = dataset_config.return_dataset(args.dataset,
+        num_class, categories, args.train_list, val_list, root_path, prefix = dataset_config.return_dataset(args.dataset,
                                                                                                 modality, ipn_no_class, bio_validation)
         print('=> shift: {}, shift_div: {}, shift_place: {}'.format(is_shift, shift_div, shift_place))
         net = TSN(num_class, this_test_segments if is_shift else 1, modality,
@@ -212,6 +221,7 @@ for val_id in range(int(val_ids[0]),int(val_ids[1])+1):
             from ops.temporal_shift import make_temporal_pool
             make_temporal_pool(net.base_model, this_test_segments)  # since DataParallel
 
+        net.RGBD_mod()
         checkpoint = torch.load(this_weights)
         checkpoint = checkpoint['state_dict']
 
@@ -247,16 +257,18 @@ for val_id in range(int(val_ids[0]),int(val_ids[1])+1):
         else:
             raise ValueError("Only 1, 5, 10 crops are supported while we got {}".format(args.test_crops))
 
+        test_file = test_file if test_file is not None else val_list
+
         data_loader = torch.utils.data.DataLoader(
-                TSNDataSet(root_path, test_file if test_file is not None else val_list, num_segments=this_test_segments,
-                           new_length=1 if modality == "RGB" else 5,
+                TSNDataSet(root_path, test_file, num_segments=this_test_segments,
+                           new_length=1 if modality in ['RGB', 'RGB-flo', 'RGB-seg'] else 5,
                            modality=modality,
                            image_tmpl=prefix,
                            test_mode=True,
                            remove_missing=len(weights_list) == 1,
                            transform=torchvision.transforms.Compose([
                                cropping,
-                               Stack(roll=(this_arch in ['BNInception', 'InceptionV3'])),
+                               Stack(roll=(this_arch in ['BNInception', 'InceptionV3']),mask=(modality in ['RGB-flo', 'RGB-seg'])),
                                ToTorchFormatTensor(div=(this_arch not in ['BNInception', 'InceptionV3'])),
                                GroupNormalize(net.input_mean, net.input_std),
                            ]), dense_sample=args.dense_sample, twice_sample=args.twice_sample, ipn=args.dataset=='ipn', ipn_no_class=ipn_no_class),
@@ -326,32 +338,9 @@ video_pred_top5 = [np.argsort(np.mean(x[0], axis=0).reshape(-1))[::-1][:5] for x
 
 video_labels = [x[1] for x in output]
 
-
-if args.csv_file is not None:
-    print('=> Writing result to csv file: {}'.format(args.csv_file))
-    with open(test_file_list[0].replace('test_videofolder.txt', 'category.txt')) as f:
-        categories = f.readlines()
-    categories = [f.strip() for f in categories]
-    with open(test_file_list[0]) as f:
-        vid_names = f.readlines()
-    vid_names = [n.split(' ')[0] for n in vid_names]
-    assert len(vid_names) == len(video_pred)
-    if args.dataset != 'somethingv2':  # only output top1
-        with open(args.csv_file, 'w') as f:
-            for n, pred in zip(vid_names, video_pred):
-                f.write('{};{}\n'.format(n, categories[pred]))
-    else:
-        with open(args.csv_file, 'w') as f:
-            for n, pred5 in zip(vid_names, video_pred_top5):
-                fill = [n]
-                for p in list(pred5):
-                    fill.append(p)
-                f.write('{};{};{};{};{};{}\n'.format(*fill))
-
-
 cf = confusion_matrix(video_labels, video_pred).astype(float)
 
-np.save('cm.npy', cf)
+# np.save('cm.npy', cf)
 cls_cnt = cf.sum(axis=1)
 cls_hit = np.diag(cf)
 
@@ -363,4 +352,40 @@ print('upper bound: {}'.format(upper))
 print('-----Evaluation is finished------')
 print('Class Accuracy {:.02f}%'.format(np.mean(cls_acc) * 100))
 print('Overall Prec@1 {:.02f}% Prec@5 {:.02f}%'.format(top1_.avg, top5_.avg))
-print(cf)
+print('{}\n\n'.format(cf))
+
+if args.csv_file is not None:
+    if args.full_res:
+        args.csv_file += '_Rfull'
+    if args.dense_sample:
+        args.csv_file += '_Sdense'
+    elif args.twice_sample:
+        args.csv_file += '_Stwice'
+    args.csv_file += '.csv'
+    print('=> Writing result to csv file: {}'.format(args.csv_file))
+    args.csv_file = os.path.join(args.weights.replace('checkpoint', 'log'), args.csv_file)
+    with open(test_file) as f:
+        vid_names = f.readlines()
+    vid_names = [n.split(',') for n in vid_names]
+    assert len(vid_names) == len(video_pred)
+    if args.dataset != 'somethingv2':  # only output top1
+        with open(args.csv_file, 'w') as f:
+            for n, pred, labl in zip(vid_names, video_pred, video_labels):
+                f.write('{},{},{}, {}, {}, {}\n'.format(n[0],n[3],n[4], categories[labl], categories[pred], categories[labl]==categories[pred]))
+    else:
+        with open(args.csv_file, 'w') as f:
+            for n, pred5 in zip(vid_names, video_pred_top5):
+                fill = [n]
+                for p in list(pred5):
+                    fill.append(p)
+                f.write('{};{};{};{};{};{}\n'.format(*fill))
+    with open(args.csv_file, 'a') as f:
+        f.write('--------Evaluation is finished---------\n')        
+        f.write('Upper bound, {:.04f}\n'.format(upper*100))
+        f.write('Class Accuracy, {:.04f}\n'.format(np.mean(cls_acc) * 100))
+        f.write('Overall, Prec@1, {:.04f}, Prec@5, {:.04f}\n'.format(top1_.avg, top5_.avg))
+        assert len(cls_acc) == len(categories)
+        f.write('Per Class Acc:\n') 
+        for n, acc in zip(categories, cls_acc):
+            f.write('{:s}, {:.04f}\n'.format(n, acc*100))
+        f.write('\n{}'.format(cf))
