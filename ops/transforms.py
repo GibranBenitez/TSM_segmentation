@@ -300,17 +300,17 @@ class GroupRandomSizedCrop(object):
 
 class Stack(object):
 
-    def __init__(self, roll=False):
+    def __init__(self, roll=False, mask=False):
         self.roll = roll
+        self.mask = mask
 
     def __call__(self, img_group):
-        if img_group[0].mode == 'L':
-            return np.concatenate([np.expand_dims(x, 2) for x in img_group], axis=2)
-        elif img_group[0].mode == 'RGB':
-            if self.roll:
-                return np.concatenate([np.array(x)[:, :, ::-1] for x in img_group], axis=2)
-            else:
-                return np.concatenate(img_group, axis=2)
+        if self.mask:
+            img_group = [x.convert('L') if not (s % 2) == 0 else x for (s,x) in enumerate(img_group)]
+        if self.roll:
+            return np.concatenate([np.array(x)[:, :, ::-1] for x in img_group], axis=2)
+        else:
+            return np.concatenate([np.expand_dims(x, 2) if x.mode == 'L' else np.array(x) for x in img_group], axis=2)
 
 
 class ToTorchFormatTensor(object):

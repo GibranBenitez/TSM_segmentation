@@ -19,6 +19,7 @@ from ops.transforms import *
 from ops import dataset_config
 from torch.nn import functional as F
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # options
 parser = argparse.ArgumentParser(description="TSM testing on the full validation set")
 parser.add_argument('--dataset', type=str, default="biovid")
@@ -28,7 +29,7 @@ parser.add_argument('--weights', type=str, default="./checkpoint/TSM_biovid2_RGB
 parser.add_argument('--val_ids', type=str, default="0,86")
 parser.add_argument('--test_segments', type=str, default="16")
 parser.add_argument('--dense_sample', default=False, action="store_true", help='use dense sample as I3D')
-parser.add_argument('--twice_sample', default=False, action="store_true", help='use twice sample for ensemble')
+parser.add_argument('--twice_sample', default=True, action="store_true", help='use twice sample for ensemble')
 parser.add_argument('--full_res', default=False, action="store_true",
                     help='use full resolution 256x256 for test as in Non-local I3D')
 

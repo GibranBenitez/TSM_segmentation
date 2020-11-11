@@ -95,7 +95,7 @@ def return_jester(modality):
 
 def return_ipn(modality):
     filename_categories = 'HandGestures/IPN_dataset/classIndAll.txt'
-    if modality == 'RGB':
+    if modality in ['RGB', 'RGB-flo', 'RGB-seg']:
         prefix = '{}_{:06d}.jpg'
         root_data = ROOT_DATASET + 'HandGestures/IPN_dataset/frames'
         filename_imglist_train = 'HandGestures/IPN_dataset/IPNhand_TrainList.txt'
