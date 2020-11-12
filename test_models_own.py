@@ -352,7 +352,7 @@ print('upper bound: {}'.format(upper))
 print('-----Evaluation is finished------')
 print('Class Accuracy {:.02f}%'.format(np.mean(cls_acc) * 100))
 print('Overall Prec@1 {:.02f}% Prec@5 {:.02f}%'.format(top1_.avg, top5_.avg))
-print('{}\n\n'.format(cf))
+print('{}'.format(cf))
 
 if args.csv_file is not None:
     if args.full_res:
@@ -362,12 +362,15 @@ if args.csv_file is not None:
     elif args.twice_sample:
         args.csv_file += '_Stwice'
     args.csv_file += '.csv'
-    print('=> Writing result to csv file: {}'.format(args.csv_file))
     args.csv_file = os.path.join(args.weights.replace('checkpoint', 'log'), args.csv_file)
     with open(test_file) as f:
         vid_names = f.readlines()
     vid_names = [n.split(',') for n in vid_names]
+    if ipn_no_class > 1:
+        vid_names = [item for item in vid_names if int(item[2]) > ipn_no_class-1]
+        print('{}, {}'.format(len(vid_names), len(video_pred)))
     assert len(vid_names) == len(video_pred)
+    print('=> Writing result to csv file: {}\n\n'.format(args.csv_file))
     if args.dataset != 'somethingv2':  # only output top1
         with open(args.csv_file, 'w') as f:
             for n, pred, labl in zip(vid_names, video_pred, video_labels):
