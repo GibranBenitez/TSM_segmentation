@@ -132,7 +132,7 @@ def return_biovid(modality):
         raise NotImplementedError('no such modality:' + modality)
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
 
-def return_dataset(dataset, modality, ipn_no_class=1, bio_val=0):
+def return_dataset(dataset, modality, ipn_no_class=1, bio_val='0'):
     dict_single = {'jester': return_jester, 'something': return_something, 'somethingv2': return_somethingv2,
                    'ucf101': return_ucf101, 'hmdb51': return_hmdb51, 'ipn': return_ipn,
                    'kinetics': return_kinetics, 'biovid': return_biovid}
@@ -155,8 +155,8 @@ def return_dataset(dataset, modality, ipn_no_class=1, bio_val=0):
             categories = [item.rstrip() for item in lines]
     elif dataset == "biovid":
         categories = ["None"] * ipn_no_class
-        file_imglist_train = 'train,{}'.format(str(bio_val))
-        file_imglist_val = 'val,{}'.format(str(bio_val))
+        file_imglist_train = 'train,{}'.format(bio_val)
+        file_imglist_val = 'val,{}'.format(bio_val)
     else:  # number of categories
         categories = [None] * file_categories
     n_class = len(categories)

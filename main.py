@@ -23,6 +23,8 @@ from ops.temporal_shift import make_temporal_pool
 from tensorboardX import SummaryWriter
 
 best_prec1 = 0
+no_exp_id = [26, 27, 31, 32, 33, 34, 35, 38, 39, 40, 41,    #defined as not expressive subjects  (http://www.iikt.ovgu.de/BioVid.print)
+            43, 50, 52, 54, 55, 60, 63, 73, 86]
 
 # TSM_jester_RGB_resnet50_shift8_blockres_avg_segment8_e50
 def main():
@@ -45,7 +47,8 @@ def main():
         ['TSM', args.dataset, args.modality, full_arch_name, args.consensus_type, 'segment%d' % args.num_segments,
          'e{}'.format(args.epochs), 'lr{:.0e}'.format(args.lr)])
     if args.dataset == 'biovid':
-        args.store_name += '_val{}'.format(args.bio_validation)
+        bio_v = str(args.bio_validation)
+        args.store_name += '_val{}'.format("".join(bio_v.split('.')))
     if args.pretrain != 'imagenet':
         args.store_name += '_{}'.format(args.pretrain)
     if args.lr_type != 'step':

@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser(description="PyTorch implementation of Temporal
 parser.add_argument('dataset', type=str)
 parser.add_argument('modality', type=str, choices=['RGB', 'Flow', 'RGB-seg', 'RGB-flo'])
 parser.add_argument('--ipn_no_class', type=int, default=1, help="and num of classes from biovid")
-parser.add_argument('--bio_validation', type=int, default=0, help="id of the subject for validation")
+parser.add_argument('--bio_validation', type=str, default='0', help="id of the subject for validation")
 parser.add_argument('--train_list', type=str, default="")
 parser.add_argument('--val_list', type=str, default="")
 parser.add_argument('--root_path', type=str, default="")

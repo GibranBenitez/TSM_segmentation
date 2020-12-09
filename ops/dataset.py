@@ -14,6 +14,7 @@ dict_biovid = [None, None,
         {'BL1': 0, 'PA4': 1}, {'BL1': 0, 'PA3': 1, 'PA4': 2},
         {'BL1': 0, 'PA2': 1, 'PA3': 2, 'PA4': 3},
         {'BL1': 0, 'PA1': 1, 'PA2': 2, 'PA3': 3, 'PA4': 4}]
+no_biovid = [37, 38, 41, 42, 43, 50, 57, 68]   # Not used in biomedical signals due to poor signal quality 
 
 class VideoRecord(object):
     def __init__(self, row):
@@ -62,7 +63,8 @@ class TSNDataSet(data.Dataset):
                  num_segments=3, new_length=1, modality='RGB',
                  image_tmpl='img_{:05d}.jpg', transform=None,
                  random_shift=True, test_mode=False, remove_missing=False,
-                 dense_sample=False, twice_sample=False, ipn=False, ipn_no_class=1):
+                 dense_sample=False, twice_sample=False, dense_window=False, full_sample=False,
+                 ipn=False, ipn_no_class=1):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -76,12 +78,18 @@ class TSNDataSet(data.Dataset):
         self.remove_missing = remove_missing
         self.dense_sample = dense_sample  # using dense sample as I3D
         self.twice_sample = twice_sample  # twice sample for more validation
+        self.dense_window = dense_window  
+        self.full_sample = full_sample  
         self.ipn = ipn
         self.id_noc = ipn_no_class
         if self.dense_sample:
             print('=> Using dense sample for the dataset...')
         if self.twice_sample:
             print('=> Using twice sample for the dataset...')
+        if self.dense_window:
+            print('=> Using dense window sample for the dataset...')
+        if self.full_sample:
+            print('=> Using full sample for the dataset...')
 
         if self.modality == 'RGBDiff':
             self.new_length += 1  # Diff needs one more image to calculate diff
@@ -175,18 +183,24 @@ class TSNDataSet(data.Dataset):
                 tmp = [item for item in tmp if int(item[2]) > self.id_noc-1]
             self.video_list = [VideoRecordIPN(item, self.id_noc) for item in tmp]
         elif self.image_tmpl == '{}/{}_{:04d}.jpg':
-            val_id = int(self.list_file.split(',')[1])
+            val_ids_raw = self.list_file.split(',')[1]
+            val_ids = [int(item) for item in val_ids_raw.split('.')]
             main_folder_list = os.listdir(self.root_path)
             main_folder_list.sort()
             if self.list_file.split(',')[0] == 'train':
-                print('generating training list of {} subjects...'.format(len(main_folder_list)-1))
+                print('generating training list of {} subjects...'.format(len(main_folder_list)-len(val_ids)-len(no_biovid)))
                 tmp = []
-                for item in main_folder_list:
-                    if item != main_folder_list[val_id]:
+                for i, item in enumerate(main_folder_list):
+                    if i in no_biovid:
+                        continue
+                    if i not in val_ids:
                         tmp += self._parse_biovid(item)
             else:
-                print('validating BioVid with subject: {}'.format(main_folder_list[val_id]))
-                tmp = self._parse_biovid(main_folder_list[val_id])
+                print('validating BioVid with {} subjects:'.format(len(val_ids)))
+                print('   {}'.format([main_folder_list[item] for item in val_ids]))
+                tmp = []
+                for val_id in val_ids:
+                    tmp += self._parse_biovid(main_folder_list[val_id])
             self.video_list = [VideoRecord(item) for item in tmp]
         else:
             tmp = [x.strip().split(' ') for x in open(self.list_file)]
@@ -252,6 +266,15 @@ class TSNDataSet(data.Dataset):
             for start_idx in start_list.tolist():
                 offsets += [(idx * t_stride + start_idx) % record.num_frames for idx in range(self.num_segments)]
             return np.array(offsets) + 1
+        elif self.dense_window:
+            chunks = record.num_frames//self.num_segments
+            t_stride = max(1, chunks // self.num_segments)
+            sample_pos = max(1, 1 + record.num_frames - t_stride*self.num_segments)
+            start_list = np.linspace(0, sample_pos - 1, num=chunks+1, dtype=int)
+            offsets = []
+            for start_idx in start_list.tolist():
+                offsets += [(idx * t_stride + start_idx) % record.num_frames for idx in range(self.num_segments)]
+            return np.array(offsets) + 1
         elif self.twice_sample:
             tick = (record.num_frames - self.new_length + 1) / float(self.num_segments)
 
@@ -259,6 +282,13 @@ class TSNDataSet(data.Dataset):
                                [int(tick * x) for x in range(self.num_segments)])
 
             return offsets + 1
+        elif self.full_sample:
+            tick = (record.num_frames - self.new_length + 1) / float(self.num_segments)
+            offsets = []
+            for start_idx in range(int(tick+1)):
+                offsets += [int(start_idx + tick * x) for x in range(self.num_segments)]
+
+            return np.array(offsets) + 1
         else:
             tick = (record.num_frames - self.new_length + 1) / float(self.num_segments)
             offsets = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segments)])
